@@ -11,7 +11,9 @@
 #include "modules/audio_processing/agc2/agc2_testing_common.h"
 
 #include <cmath>
+#include <math.h>
 
+#define _USE_MATH_DEFINES  // For M_PI on Windows/MSVC
 #include "rtc_base/checks.h"
 
 namespace webrtc {
@@ -61,7 +63,7 @@ float SineGenerator::operator()() {
   if (x_radians_ >= 2 * kPi) {
     x_radians_ -= 2 * kPi;
   }
-  return amplitude_ * std::sinf(x_radians_);
+  return amplitude_ * ::sinf(x_radians_);
 }
 
 PulseGenerator::PulseGenerator(float pulse_amplitude,

@@ -18,7 +18,10 @@
 #include <intrin.h>
 #endif
 
+#include <cstring>
+
 namespace webrtc {
+
 
 // No CPU feature is available => straight C path.
 int GetCPUInfoNoASM(CPUFeature feature) {
@@ -27,21 +30,6 @@ int GetCPUInfoNoASM(CPUFeature feature) {
 }
 
 #if defined(WEBRTC_ARCH_X86_FAMILY)
-
-#if defined(WEBRTC_ENABLE_AVX2)
-// xgetbv returns the value of an Intel Extended Control Register (XCR).
-// Currently only XCR0 is defined by Intel so `xcr` should always be zero.
-static uint64_t xgetbv(uint32_t xcr) {
-#if defined(_MSC_VER)
-  return _xgetbv(xcr);
-#else
-  uint32_t eax, edx;
-
-  __asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(xcr));
-  return (static_cast<uint64_t>(edx) << 32) | eax;
-#endif  // _MSC_VER
-}
-#endif  // WEBRTC_ENABLE_AVX2
 
 #ifndef _MSC_VER
 // Intrinsic for "cpuid".
@@ -67,42 +55,112 @@ static inline void __cpuid(int cpu_info[4], int info_type) {
 #endif  // WEBRTC_ARCH_X86_FAMILY
 
 #if defined(WEBRTC_ARCH_X86_FAMILY)
+
+#if defined(WEBRTC_ENABLE_AVX2)
+// xgetbv returns the value of an Intel Extended Control Register (XCR).
+// Currently only XCR0 is defined by Intel so `xcr` should always be zero.
+// Enhanced with safety checks to avoid illegal instructions on unsupported CPUs.
+static uint64_t xgetbv(uint32_t xcr) {
+  // First check if XGETBV is supported by checking OSXSAVE bit
+  int cpu_info[4];
+
+  // Use the local __cpuid function defined in this file
+#if defined(_MSC_VER)
+  __cpuid(cpu_info, 1);
+#else
+  __cpuid(cpu_info, 1);
+#endif
+
+  // If OSXSAVE bit is not set, XGETBV is not supported
+  if ((cpu_info[2] & 0x08000000) == 0) {
+    return 0;  // Return safe default value
+  }
+
+  // Only execute XGETBV if it's supported
+#if defined(_MSC_VER)
+  try {
+    return _xgetbv(xcr);
+  } catch (...) {
+    return 0;  // Return safe default value on any error
+  }
+#else
+  uint32_t eax, edx;
+  try {
+    __asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(xcr));
+    return (static_cast<uint64_t>(edx) << 32) | eax;
+  } catch (...) {
+    return 0;  // Return safe default value on any error
+  }
+#endif  // _MSC_VER
+}
+#endif  // WEBRTC_ENABLE_AVX2
+
 // Actual feature detection for x86.
 int GetCPUInfo(CPUFeature feature) {
   int cpu_info[4];
   __cpuid(cpu_info, 1);
+
   if (feature == kSSE2) {
     return 0 != (cpu_info[3] & 0x04000000);
   }
+
   if (feature == kSSE3) {
     return 0 != (cpu_info[2] & 0x00000001);
   }
+
 #if defined(WEBRTC_ENABLE_AVX2)
-  if (feature == kAVX2 &&
-      !webrtc::field_trial::IsEnabled("WebRTC-Avx2SupportKillSwitch")) {
-    int cpu_info7[4];
-    __cpuid(cpu_info7, 0);
-    int num_ids = cpu_info7[0];
-    if (num_ids < 7) {
+  if (feature == kAVX2) {
+    // Check if field trial disables AVX2 support
+    try {
+      if (webrtc::field_trial::IsEnabled("WebRTC-Avx2SupportKillSwitch")) {
+        return 0;
+      }
+    } catch (...) {
+      // If field trial system is not initialized, disable AVX2 for safety
       return 0;
     }
-    // Interpret CPU feature information.
+
+    // Perform comprehensive CPU capability check
+    int cpu_info7[4];
+    __cpuid(cpu_info7, 0);
+    if (cpu_info7[0] < 7) {
+      return 0;
+    }
+
     __cpuid(cpu_info7, 7);
 
-    // AVX instructions can be used when
-    //     a) AVX are supported by the CPU,
-    //     b) XSAVE is supported by the CPU,
-    //     c) XSAVE is enabled by the kernel.
-    // Compiling with MSVC and /arch:AVX2 surprisingly generates BMI2
-    // instructions (see crbug.com/1315519).
-    return (cpu_info[2] & 0x10000000) != 0 /* AVX */ &&
-           (cpu_info[2] & 0x04000000) != 0 /* XSAVE */ &&
-           (cpu_info[2] & 0x08000000) != 0 /* OSXSAVE */ &&
-           (xgetbv(0) & 0x00000006) == 6 /* XSAVE enabled by kernel */ &&
-           (cpu_info7[1] & 0x00000020) != 0 /* AVX2 */ &&
-           (cpu_info7[1] & 0x00000100) != 0 /* BMI2 */;
+    // Check AVX support
+    if (!(cpu_info[2] & 0x10000000)) {  // AVX bit
+      return 0;
+    }
+
+    // Check XSAVE support
+    if (!(cpu_info[2] & 0x04000000)) {  // XSAVE bit
+      return 0;
+    }
+
+    // Check OSXSAVE bit
+    if (!(cpu_info[2] & 0x08000000)) {  // OSXSAVE bit
+      return 0;
+    }
+
+    // Check OS-level XSAVE support
+    uint64_t xcr0_value = xgetbv(0);
+    if ((xcr0_value & 0x00000006) != 6) {  // x87 + SSE state enabled
+      return 0;
+    }
+
+    // Check CPU AVX2 support
+    if (!(cpu_info7[1] & 0x00000020)) {  // AVX2 bit
+      return 0;
+    }
+
+    // All checks passed - AVX2 is supported
+    return 1;
   }
 #endif  // WEBRTC_ENABLE_AVX2
+
+  // Unknown feature
   return 0;
 }
 #else

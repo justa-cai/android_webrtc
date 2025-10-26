@@ -11,6 +11,8 @@
 #ifndef COMMON_AUDIO_FIR_FILTER_AVX2_H_
 #define COMMON_AUDIO_FIR_FILTER_AVX2_H_
 
+#if defined(WEBRTC_ENABLE_AVX2) && WEBRTC_ENABLE_AVX2
+
 #include <stddef.h>
 
 #include <memory>
@@ -38,4 +40,5 @@ class FIRFilterAVX2 : public FIRFilter {
 
 }  // namespace webrtc
 
+#endif  // WEBRTC_ENABLE_AVX2 && WEBRTC_ENABLE_AVX2
 #endif  // COMMON_AUDIO_FIR_FILTER_AVX2_H_

@@ -126,6 +126,7 @@ void SincResampler::InitializeCPUSpecificFeatures() {
 #if defined(WEBRTC_HAS_NEON)
   convolve_proc_ = Convolve_NEON;
 #elif defined(WEBRTC_ARCH_X86_FAMILY)
+#if defined(WEBRTC_ENABLE_AVX2) && WEBRTC_ENABLE_AVX2
   // Using AVX2 instead of SSE2 when AVX2 supported.
   if (GetCPUInfo(kAVX2))
     convolve_proc_ = Convolve_AVX2;
@@ -133,6 +134,13 @@ void SincResampler::InitializeCPUSpecificFeatures() {
     convolve_proc_ = Convolve_SSE;
   else
     convolve_proc_ = Convolve_C;
+#else
+  // AVX2 disabled at compile time - only use SSE2 or fallback
+  if (GetCPUInfo(kSSE2))
+    convolve_proc_ = Convolve_SSE;
+  else
+    convolve_proc_ = Convolve_C;
+#endif
 #else
   // Unknown architecture.
   convolve_proc_ = Convolve_C;

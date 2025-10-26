@@ -20,7 +20,7 @@
 #include "modules/audio_processing/agc2/gain_applier.h"
 #include "modules/audio_processing/agc2/input_volume_controller.h"
 #include "modules/audio_processing/agc2/limiter.h"
-#include "modules/audio_processing/agc2/vad_wrapper.h"
+#include "vad_wrapper_simple.h"
 #include "modules/audio_processing/include/audio_processing.h"
 #include "modules/audio_processing/logging/apm_data_dumper.h"
 

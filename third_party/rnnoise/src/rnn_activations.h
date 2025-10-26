@@ -1,1 +1,1 @@
-#include <rnn_activations.h>
+#include "../../../rnnoise/src/rnn_activations.h"

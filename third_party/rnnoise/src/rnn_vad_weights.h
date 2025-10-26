@@ -1,1 +1,1 @@
-#include <rnn_vad_weights.h>
+#include "../../../rnnoise/src/rnn_vad_weights.h"

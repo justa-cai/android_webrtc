@@ -40,7 +40,9 @@ class VectorMath {
       : optimization_(optimization) {}
 
   // Elementwise square root.
+#if defined(WEBRTC_ENABLE_AVX2) && WEBRTC_ENABLE_AVX2
   void SqrtAVX2(rtc::ArrayView<float> x);
+#endif
   void Sqrt(rtc::ArrayView<float> x) {
     switch (optimization_) {
 #if defined(WEBRTC_ARCH_X86_FAMILY)
@@ -59,9 +61,11 @@ class VectorMath {
           x[j] = sqrtf(x[j]);
         }
       } break;
+  #if defined(WEBRTC_ENABLE_AVX2) && WEBRTC_ENABLE_AVX2
       case Aec3Optimization::kAvx2:
         SqrtAVX2(x);
         break;
+#endif
 #endif
 #if defined(WEBRTC_HAS_NEON)
       case Aec3Optimization::kNeon: {
